@@ -15,6 +15,7 @@ crate-type = ["lib"]
 ulmen-core = { path = "../lumen/ulmen-core" }
 
 [dev-dependencies]
+uldb = { path = "../uldb" }
 
 [profile.release]
 lto = true
