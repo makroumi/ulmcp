@@ -1,0 +1,23 @@
+[package]
+name = "ulmcp"
+version = "0.1.0"
+edition = "2021"
+authors = ["El Mehdi Makroumi"]
+description = "Ulmen Context Protocol: native tool protocol for agentic AI"
+license = "BUSL-1.1"
+
+[lib]
+name = "ulmcp"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[dependencies]
+ulmen-core = { path = "../lumen/ulmen-core" }
+
+[dev-dependencies]
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
