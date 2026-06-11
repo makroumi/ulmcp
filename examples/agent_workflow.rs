@@ -30,9 +30,7 @@ fn main() {
     let dir = std::env::temp_dir().join(format!("ulmcp_e2e_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
 
-    let engine = Arc::new(RwLock::new(
-        Engine::open(EngineConfig::new(&dir)).unwrap()
-    ));
+    let engine = Arc::new(RwLock::new(Engine::open(EngineConfig::new(&dir)).unwrap()));
 
     // Ingest a simulated codebase
     let codebase: Vec<(&str, &str)> = vec![
@@ -81,74 +79,97 @@ fn main() {
     let eng_search = Arc::clone(&engine);
     let search_tool = ToolDef::new("code_search", "Search codebase for symbols and patterns")
         .param("query", "Search query text", ParamType::String, true)
-        .param("limit", "Maximum results to return", ParamType::Integer, false)
+        .param(
+            "limit",
+            "Maximum results to return",
+            ParamType::Integer,
+            false,
+        )
         .timeout(5000)
         .estimated_tokens(200)
         .tag("search");
 
-    registry.register_tool(search_tool, Box::new(move |call| {
-        let query = call.arguments.get("query")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let limit = call.arguments.get("limit")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(10) as usize;
+    registry.register_tool(
+        search_tool,
+        Box::new(move |call| {
+            let query = call
+                .arguments
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let limit = call
+                .arguments
+                .get("limit")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(10) as usize;
 
-        let mut eng = eng_search.write().unwrap();
-        let spec = uldb::query::planner::QuerySpec {
-            text: query.to_string(),
-            top_k: limit,
-            ..Default::default()
-        };
-        let hits = eng.indices.query(&spec);
+            let mut eng = eng_search.write().unwrap();
+            let spec = uldb::query::planner::QuerySpec {
+                text: query.to_string(),
+                top_k: limit,
+                ..Default::default()
+            };
+            let hits = eng.indices.query(&spec);
 
-        let results: Vec<String> = hits.iter()
-            .map(|h| String::from_utf8_lossy(&h.key).to_string())
-            .collect();
+            let results: Vec<String> = hits
+                .iter()
+                .map(|h| String::from_utf8_lossy(&h.key).to_string())
+                .collect();
 
-        ToolResult {
-            call_id: call.call_id.clone(),
-            status: ToolStatus::Success,
-            output: ToolValue::String(results.join("\n")),
-            error: None,
-            tokens_used: Some(results.len() * 20),
-            latency_ms: None,
-        }
-    }));
+            ToolResult {
+                call_id: call.call_id.clone(),
+                status: ToolStatus::Success,
+                output: ToolValue::String(results.join("\n")),
+                error: None,
+                tokens_used: Some(results.len() * 20),
+                latency_ms: None,
+            }
+        }),
+    );
 
     // Tool: file_read
     let eng_read = Arc::clone(&engine);
     let read_tool = ToolDef::new("file_read", "Read a source file by its qualified path")
-        .param("path", "Qualified path (e.g. auth/jwt.py::validate_token)", ParamType::String, true)
+        .param(
+            "path",
+            "Qualified path (e.g. auth/jwt.py::validate_token)",
+            ParamType::String,
+            true,
+        )
         .timeout(1000)
         .estimated_tokens(500)
         .tag("io");
 
-    registry.register_tool(read_tool, Box::new(move |call| {
-        let path = call.arguments.get("path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+    registry.register_tool(
+        read_tool,
+        Box::new(move |call| {
+            let path = call
+                .arguments
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
-        let eng = eng_read.read().unwrap();
-        match eng.get(path.as_bytes()) {
-            Some(data) => ToolResult {
-                call_id: call.call_id.clone(),
-                status: ToolStatus::Success,
-                output: ToolValue::String(String::from_utf8_lossy(&data).to_string()),
-                error: None,
-                tokens_used: Some(data.len() / 4),
-                latency_ms: None,
-            },
-            None => ToolResult {
-                call_id: call.call_id.clone(),
-                status: ToolStatus::Error,
-                output: ToolValue::Null,
-                error: Some(format!("file not found: {}", path)),
-                tokens_used: None,
-                latency_ms: None,
-            },
-        }
-    }));
+            let eng = eng_read.read().unwrap();
+            match eng.get(path.as_bytes()) {
+                Some(data) => ToolResult {
+                    call_id: call.call_id.clone(),
+                    status: ToolStatus::Success,
+                    output: ToolValue::String(String::from_utf8_lossy(&data).to_string()),
+                    error: None,
+                    tokens_used: Some(data.len() / 4),
+                    latency_ms: None,
+                },
+                None => ToolResult {
+                    call_id: call.call_id.clone(),
+                    status: ToolStatus::Error,
+                    output: ToolValue::Null,
+                    error: Some(format!("file not found: {}", path)),
+                    tokens_used: None,
+                    latency_ms: None,
+                },
+            }
+        }),
+    );
 
     // Tool: file_write
     let eng_write = Arc::clone(&engine);
@@ -158,34 +179,41 @@ fn main() {
         .timeout(2000)
         .tag("io");
 
-    registry.register_tool(write_tool, Box::new(move |call| {
-        let path = call.arguments.get("path")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let content = call.arguments.get("content")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+    registry.register_tool(
+        write_tool,
+        Box::new(move |call| {
+            let path = call
+                .arguments
+                .get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let content = call
+                .arguments
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
-        let mut eng = eng_write.write().unwrap();
-        match eng.put(path.as_bytes(), content.as_bytes()) {
-            Ok(()) => ToolResult {
-                call_id: call.call_id.clone(),
-                status: ToolStatus::Success,
-                output: ToolValue::String(format!("wrote {} bytes to {}", content.len(), path)),
-                error: None,
-                tokens_used: Some(10),
-                latency_ms: None,
-            },
-            Err(e) => ToolResult {
-                call_id: call.call_id.clone(),
-                status: ToolStatus::Error,
-                output: ToolValue::Null,
-                error: Some(format!("write failed: {}", e)),
-                tokens_used: None,
-                latency_ms: None,
-            },
-        }
-    }));
+            let mut eng = eng_write.write().unwrap();
+            match eng.put(path.as_bytes(), content.as_bytes()) {
+                Ok(()) => ToolResult {
+                    call_id: call.call_id.clone(),
+                    status: ToolStatus::Success,
+                    output: ToolValue::String(format!("wrote {} bytes to {}", content.len(), path)),
+                    error: None,
+                    tokens_used: Some(10),
+                    latency_ms: None,
+                },
+                Err(e) => ToolResult {
+                    call_id: call.call_id.clone(),
+                    status: ToolStatus::Error,
+                    output: ToolValue::Null,
+                    error: Some(format!("write failed: {}", e)),
+                    tokens_used: None,
+                    latency_ms: None,
+                },
+            }
+        }),
+    );
 
     // Register resources
     let eng_res = Arc::clone(&engine);
@@ -193,22 +221,28 @@ fn main() {
         .description("Full codebase indexed in uldb")
         .subscribable();
 
-    registry.register_resource(codebase_resource, Box::new(move |_uri| {
-        let eng = eng_res.read().unwrap();
-        let stats = format!(
-            "Codebase: {} records indexed, {} symbols",
-            eng.memtable_len(),
-            eng.indices.stats().fuzzy_symbols
-        );
-        Some(ResourceContent {
-            uri: "uldb://codebase".into(),
-            mime_type: "text/plain".into(),
-            data: ResourceData::Text(stats),
-        })
-    }));
+    registry.register_resource(
+        codebase_resource,
+        Box::new(move |_uri| {
+            let eng = eng_res.read().unwrap();
+            let stats = format!(
+                "Codebase: {} records indexed, {} symbols",
+                eng.memtable_len(),
+                eng.indices.stats().fuzzy_symbols
+            );
+            Some(ResourceContent {
+                uri: "uldb://codebase".into(),
+                mime_type: "text/plain".into(),
+                data: ResourceData::Text(stats),
+            })
+        }),
+    );
 
-    println!("  [2] Registered {} tools, {} resources",
-        registry.tool_count(), registry.resource_count());
+    println!(
+        "  [2] Registered {} tools, {} resources",
+        registry.tool_count(),
+        registry.resource_count()
+    );
 
     // ===================================================================
     // 3. Simulate agent workflow
@@ -225,7 +259,10 @@ fn main() {
         tool_name: "code_search".into(),
         arguments: {
             let mut m = HashMap::new();
-            m.insert("query".into(), ToolValue::String("validate token jwt authentication".into()));
+            m.insert(
+                "query".into(),
+                ToolValue::String("validate token jwt authentication".into()),
+            );
             m.insert("limit".into(), ToolValue::Integer(5));
             m
         },
@@ -237,10 +274,15 @@ fn main() {
         ctx.use_tokens(tokens);
     }
     println!("      Step 1: Search 'validate token jwt'");
-    println!("        Results: {}", search_result.output.as_str().unwrap_or("none"));
-    println!("        Latency: {} us", search_result.latency_ms.unwrap_or(0));
-    println!("        Tokens used: {} / {} budget",
-        ctx.used, ctx.budget);
+    println!(
+        "        Results: {}",
+        search_result.output.as_str().unwrap_or("none")
+    );
+    println!(
+        "        Latency: {} us",
+        search_result.latency_ms.unwrap_or(0)
+    );
+    println!("        Tokens used: {} / {} budget", ctx.used, ctx.budget);
 
     // Step 2: Read the current implementation
     let read_call = ToolCall {
@@ -248,7 +290,10 @@ fn main() {
         tool_name: "file_read".into(),
         arguments: {
             let mut m = HashMap::new();
-            m.insert("path".into(), ToolValue::String("auth/jwt.py::validate_token".into()));
+            m.insert(
+                "path".into(),
+                ToolValue::String("auth/jwt.py::validate_token".into()),
+            );
             m
         },
     };
@@ -271,7 +316,10 @@ fn main() {
         tool_name: "file_write".into(),
         arguments: {
             let mut m = HashMap::new();
-            m.insert("path".into(), ToolValue::String("auth/jwt.py::validate_token".into()));
+            m.insert(
+                "path".into(),
+                ToolValue::String("auth/jwt.py::validate_token".into()),
+            );
             m.insert("content".into(), ToolValue::String(new_code.into()));
             m
         },
@@ -283,7 +331,10 @@ fn main() {
         ctx.use_tokens(tokens);
     }
     println!("\n      Step 3: Write improved validate_token");
-    println!("        Result: {}", write_result.output.as_str().unwrap_or(""));
+    println!(
+        "        Result: {}",
+        write_result.output.as_str().unwrap_or("")
+    );
     println!("        Tokens: {} / {}", ctx.used, ctx.budget);
 
     // Step 4: Verify the change
@@ -292,7 +343,10 @@ fn main() {
         tool_name: "file_read".into(),
         arguments: {
             let mut m = HashMap::new();
-            m.insert("path".into(), ToolValue::String("auth/jwt.py::validate_token".into()));
+            m.insert(
+                "path".into(),
+                ToolValue::String("auth/jwt.py::validate_token".into()),
+            );
             m
         },
     };
@@ -300,15 +354,24 @@ fn main() {
     let verify_result = registry.invoke(&verify_call);
     assert_eq!(verify_result.status, ToolStatus::Success);
     let verified = verify_result.output.as_str().unwrap_or("");
-    assert!(verified.contains("_cached_key"), "new code must contain cache");
+    assert!(
+        verified.contains("_cached_key"),
+        "new code must contain cache"
+    );
     println!("\n      Step 4: Verify change applied");
-    println!("        Contains cache: {}", verified.contains("_cached_key"));
+    println!(
+        "        Contains cache: {}",
+        verified.contains("_cached_key")
+    );
 
     // Step 5: Read resource
     let resource = registry.read_resource("uldb://codebase");
     assert!(resource.is_some());
     println!("\n      Step 5: Read codebase resource");
-    println!("        Info: {}", resource.unwrap().data.as_text().unwrap_or(""));
+    println!(
+        "        Info: {}",
+        resource.unwrap().data.as_text().unwrap_or("")
+    );
 
     // Step 6: Check context budget
     println!("\n      Context budget:");
@@ -323,16 +386,29 @@ fn main() {
     println!("\n  [4] Tool discovery");
     println!("      All tools:");
     for tool in registry.list_tools() {
-        println!("        {} - {} (timeout: {}ms)",
-            tool.name, tool.description,
-            tool.timeout_ms.unwrap_or(0));
+        println!(
+            "        {} - {} (timeout: {}ms)",
+            tool.name,
+            tool.description,
+            tool.timeout_ms.unwrap_or(0)
+        );
     }
-    println!("      Search tools: {:?}",
-        registry.find_tools_by_tag("search").iter()
-            .map(|t| t.name.as_str()).collect::<Vec<_>>());
-    println!("      IO tools: {:?}",
-        registry.find_tools_by_tag("io").iter()
-            .map(|t| t.name.as_str()).collect::<Vec<_>>());
+    println!(
+        "      Search tools: {:?}",
+        registry
+            .find_tools_by_tag("search")
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect::<Vec<_>>()
+    );
+    println!(
+        "      IO tools: {:?}",
+        registry
+            .find_tools_by_tag("io")
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect::<Vec<_>>()
+    );
 
     // ===================================================================
     // 5. Validation edge cases
@@ -348,7 +424,10 @@ fn main() {
     };
     let bad_result = registry.invoke(&bad_call);
     assert_eq!(bad_result.status, ToolStatus::Error);
-    println!("      Missing param: {} (correct)", bad_result.error.unwrap_or_default());
+    println!(
+        "      Missing param: {} (correct)",
+        bad_result.error.unwrap_or_default()
+    );
 
     // Unknown tool
     let unknown_call = ToolCall {
@@ -358,7 +437,10 @@ fn main() {
     };
     let unknown_result = registry.invoke(&unknown_call);
     assert_eq!(unknown_result.status, ToolStatus::Error);
-    println!("      Unknown tool:  {} (correct)", unknown_result.error.unwrap_or_default());
+    println!(
+        "      Unknown tool:  {} (correct)",
+        unknown_result.error.unwrap_or_default()
+    );
 
     // Read nonexistent file
     let missing_call = ToolCall {
@@ -366,13 +448,19 @@ fn main() {
         tool_name: "file_read".into(),
         arguments: {
             let mut m = HashMap::new();
-            m.insert("path".into(), ToolValue::String("nonexistent/file.py".into()));
+            m.insert(
+                "path".into(),
+                ToolValue::String("nonexistent/file.py".into()),
+            );
             m
         },
     };
     let missing_result = registry.invoke(&missing_call);
     assert_eq!(missing_result.status, ToolStatus::Error);
-    println!("      Missing file:  {} (correct)", missing_result.error.unwrap_or_default());
+    println!(
+        "      Missing file:  {} (correct)",
+        missing_result.error.unwrap_or_default()
+    );
 
     // ===================================================================
     // 6. Benchmarks
@@ -394,13 +482,20 @@ fn main() {
     };
 
     // Warmup
-    for _ in 0..100 { let _ = registry.invoke(&search_bench); }
+    for _ in 0..100 {
+        let _ = registry.invoke(&search_bench);
+    }
 
     let start = Instant::now();
-    for _ in 0..iters { let _ = registry.invoke(&search_bench); }
+    for _ in 0..iters {
+        let _ = registry.invoke(&search_bench);
+    }
     let search_ns = start.elapsed().as_nanos() as f64 / iters as f64;
-    println!("      code_search invoke:    {:>8.0} ns ({:.0}K ops/sec)",
-        search_ns, 1_000_000_000.0 / search_ns / 1000.0);
+    println!(
+        "      code_search invoke:    {:>8.0} ns ({:.0}K ops/sec)",
+        search_ns,
+        1_000_000_000.0 / search_ns / 1000.0
+    );
 
     // Tool invoke (file_read)
     let read_bench = ToolCall {
@@ -408,25 +503,32 @@ fn main() {
         tool_name: "file_read".into(),
         arguments: {
             let mut m = HashMap::new();
-            m.insert("path".into(), ToolValue::String("auth/jwt.py::validate_token".into()));
+            m.insert(
+                "path".into(),
+                ToolValue::String("auth/jwt.py::validate_token".into()),
+            );
             m
         },
     };
 
-    for _ in 0..100 { let _ = registry.invoke(&read_bench); }
+    for _ in 0..100 {
+        let _ = registry.invoke(&read_bench);
+    }
     let start = Instant::now();
-    for _ in 0..iters { let _ = registry.invoke(&read_bench); }
+    for _ in 0..iters {
+        let _ = registry.invoke(&read_bench);
+    }
     let read_ns = start.elapsed().as_nanos() as f64 / iters as f64;
-    println!("      file_read invoke:      {:>8.0} ns ({:.0}K ops/sec)",
-        read_ns, 1_000_000_000.0 / read_ns / 1000.0);
+    println!(
+        "      file_read invoke:      {:>8.0} ns ({:.0}K ops/sec)",
+        read_ns,
+        1_000_000_000.0 / read_ns / 1000.0
+    );
 
     // Tool validation
     let start = Instant::now();
     for _ in 0..iters {
-        let _ = validate_call(
-            registry.get_tool("code_search").unwrap(),
-            &search_bench,
-        );
+        let _ = validate_call(registry.get_tool("code_search").unwrap(), &search_bench);
     }
     let validate_ns = start.elapsed().as_nanos() as f64 / iters as f64;
     println!("      validate_call:         {:>8.0} ns", validate_ns);
