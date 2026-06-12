@@ -235,5 +235,72 @@ mod tests {
         let search_tools = reg.find_tools_by_tag("search");
         assert_eq!(search_tools.len(), 1);
         assert_eq!(search_tools[0].name, "search");
+
+        #[test]
+        fn invoke_checked_denied() {
+            let reg = make_registry();
+            let call = ToolCall {
+                call_id: "c1".into(),
+                tool_name: "search".into(),
+                arguments: {
+                    let mut m = HashMap::new();
+                    m.insert("query".into(), ToolValue::String("test".into()));
+                    m
+                },
+            };
+            // Only allow "other_tool", not "search"
+            let result = reg.invoke_checked(&call, Some(&["other_tool"]));
+            assert_eq!(result.status, ToolStatus::Error);
+            assert!(result.error.unwrap().contains("capability denied"));
+        }
+
+        #[test]
+        fn invoke_checked_allowed() {
+            let reg = make_registry();
+            let call = ToolCall {
+                call_id: "c1".into(),
+                tool_name: "search".into(),
+                arguments: {
+                    let mut m = HashMap::new();
+                    m.insert("query".into(), ToolValue::String("test".into()));
+                    m
+                },
+            };
+            let result = reg.invoke_checked(&call, Some(&["search", "other"]));
+            assert_eq!(result.status, ToolStatus::Success);
+        }
+
+        #[test]
+        fn invoke_checked_wildcard() {
+            let reg = make_registry();
+            let call = ToolCall {
+                call_id: "c1".into(),
+                tool_name: "search".into(),
+                arguments: {
+                    let mut m = HashMap::new();
+                    m.insert("query".into(), ToolValue::String("test".into()));
+                    m
+                },
+            };
+            let result = reg.invoke_checked(&call, Some(&["*"]));
+            assert_eq!(result.status, ToolStatus::Success);
+        }
+
+        #[test]
+        fn invoke_checked_no_restriction() {
+            let reg = make_registry();
+            let call = ToolCall {
+                call_id: "c1".into(),
+                tool_name: "search".into(),
+                arguments: {
+                    let mut m = HashMap::new();
+                    m.insert("query".into(), ToolValue::String("test".into()));
+                    m
+                },
+            };
+            // None = no restrictions
+            let result = reg.invoke_checked(&call, None);
+            assert_eq!(result.status, ToolStatus::Success);
+        }
     }
 }

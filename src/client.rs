@@ -102,8 +102,8 @@ impl Client {
 mod tests {
     use super::*;
     use crate::registry::Registry;
-    use crate::tool::{ToolDef, ParamType, ToolResult, ToolStatus, ToolValue};
     use crate::server::handle_message;
+    use crate::tool::{ParamType, ToolDef, ToolResult, ToolStatus, ToolValue};
 
     fn test_registry() -> Registry {
         let mut reg = Registry::new();
